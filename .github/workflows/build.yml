@@ -14,7 +14,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -22,19 +21,44 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Accept Android SDK Licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+          link-to-sdk: true
+
+      - name: Create local.properties
+        run: |
+          mkdir -p example/android
+          echo "sdk.dir=$ANDROID_HOME" > example/android/local.properties
+          echo "ndk.dir=$ANDROID_NDK_ROOT" >> example/android/local.properties
 
       - name: Make gradlew executable
         run: chmod +x example/android/gradlew
 
       - name: Install root dependencies
-        run: |
-          npm install --legacy-peer-deps || yarn install --ignore-engines
+        run: npm install --legacy-peer-deps || yarn install --ignore-engines
 
       - name: Build root module
         run: npm run prepare || npm run build || true
 
+      - name: Install example dependencies
+        run: |
+          cd example
+          npm install --legacy-peer-deps || yarn install --ignore-engines
+
+      - name: Build Android APK
+        run: |
+          cd example/android
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bitnet-chat-apk
+          path: example/android/app/build/outputs/apk/**/*.apk
+          
       - name: Install example dependencies
         run: |
           cd example
